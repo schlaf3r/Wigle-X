@@ -1165,6 +1165,9 @@ public final class MainActivity extends AppCompatActivity implements TextToSpeec
                 Logging.info("batteryLevelReceiver not registered: " + ex);
             }
 
+            if (state.wifiReceiver != null) {
+                state.wifiReceiver.stopExternalAdapters(getApplicationContext());
+            }
             try {
                 Logging.info("unregister wifiReceiver");
                 unregisterReceiver(state.wifiReceiver);
@@ -1979,6 +1982,8 @@ public final class MainActivity extends AppCompatActivity implements TextToSpeec
             state.wifiReceiver = new WifiReceiver(this, state.dbHelper);
             state.wifiReceiver.setupWifiTimer(turnedWifiOn);
         }
+        // Wigle-X: USB WiFi adapters run alongside the phone's scan
+        updateExternalAdapters(isScanning());
         if (state.cellReceiver == null) {
             Logging.info("\tnew cellReceiver");
             state.cellReceiver = new CellReceiver(this, state.dbHelper, getApplicationContext());
@@ -2478,8 +2483,25 @@ public final class MainActivity extends AppCompatActivity implements TextToSpeec
             state.wantsScanWakeLock = false;
             releaseScanWakeLock();
         }
+        updateExternalAdapters(isScanning);
         if (null != state && null != state.wigleService) {
             state.wigleService.setupNotification();
+        }
+    }
+
+    /**
+     * Wigle-X: run the USB WiFi adapters (receive-only monitor mode, no root) while scanning is on and
+     * Settings › "Use USB WiFi adapters" is checked; stop them otherwise.
+     */
+    public void updateExternalAdapters(final boolean isScanning) {
+        if (state == null || state.wifiReceiver == null) {
+            return;
+        }
+        final SharedPreferences prefs = getSharedPreferences(PreferenceKeys.SHARED_PREFS, Context.MODE_PRIVATE);
+        if (isScanning && prefs.getBoolean(PreferenceKeys.PREF_USB_WIFI_ADAPTERS, true)) {
+            state.wifiReceiver.startExternalAdapters(getApplicationContext());
+        } else {
+            state.wifiReceiver.stopExternalAdapters(getApplicationContext());
         }
     }
 

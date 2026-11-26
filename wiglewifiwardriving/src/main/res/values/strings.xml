@@ -513,4 +513,6 @@
     <string name="export_alert_filter">Export alert filter</string>
     <string name="export_alert_filter_description_hint">Filter description</string>
     <string name="export_alert_filter_empty">No alert addresses or BLE manufacturer IDs to export</string>
+    <!-- Wigle-X -->
+    <string name="usb_wifi_adapters" translatable="false">Use USB WiFi adapters (monitor mode over OTG, no root)</string>
 </resources>

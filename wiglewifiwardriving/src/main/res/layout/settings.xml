@@ -131,6 +131,11 @@
         android:layout_height="wrap_content"
         android:text="@string/show_current" />
 
+    <CheckBox android:id="@+id/usb_wifi_adapters"
+        android:layout_width="fill_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/usb_wifi_adapters" />
+
     <CheckBox android:id="@+id/display_inline_histograms"
         android:layout_width="fill_parent"
         android:layout_height="wrap_content"

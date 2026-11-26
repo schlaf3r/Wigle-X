@@ -572,6 +572,14 @@ public final class SettingsFragment extends Fragment implements DialogListener {
         final Activity thisActivity = this.getActivity();
         if (null != thisActivity) {
             PrefsBackedCheckbox.prefBackedCheckBox(thisActivity, view, R.id.edit_showcurrent, PreferenceKeys.PREF_SHOW_CURRENT, true);
+            // Wigle-X: USB WiFi adapters
+            PrefsBackedCheckbox.prefBackedCheckBox(thisActivity, view, R.id.usb_wifi_adapters,
+                    PreferenceKeys.PREF_USB_WIFI_ADAPTERS, true, value -> {
+                        final MainActivity m = MainActivity.getMainActivity();
+                        if (m != null) {
+                            m.updateExternalAdapters(m.isScanning());
+                        }
+                    });
             PrefsBackedCheckbox.prefBackedCheckBox(thisActivity, view, R.id.display_inline_histograms,
                     PreferenceKeys.PREF_DISPLAY_INLINE_LIST_SIGNAL_HISTOGRAMS, false, value -> {
                         final MainActivity.State s = MainActivity.getStaticState();

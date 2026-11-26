@@ -451,7 +451,8 @@ public class ObservationUploader extends AbstractProgressApiRequest {
         final CSVPrinter headerPrinter = new CSVPrinter(headerBuffer, CSV_FORMAT);
         headerPrinter.printRecord(
                 "WigleWifi-1.6",
-                "appRelease=" + BuildReleaseTag.tagVersionForExports(pi.versionName),
+                // Wigle-X: mark uploads from this fork (records may include USB-adapter observations)
+                "appRelease=" + BuildReleaseTag.tagVersionForExports(pi.versionName) + "-wiglex",
                 "model=" + android.os.Build.MODEL,
                 "release=" + android.os.Build.VERSION.RELEASE,
                 "device=" + android.os.Build.DEVICE,

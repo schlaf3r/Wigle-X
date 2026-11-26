@@ -1,3 +1,29 @@
+# Wigle-X: WiGLE with USB WiFi adapter support
+
+Wigle-X is a fork of the WiGLE client that also records access points heard by a **USB WiFi adapter on an OTG
+cable**, in receive-only monitor mode, **without root**. The adapter drivers run in userspace through Android's USB
+host API. They are ported from [RF Sentinel](https://github.com/schlaf3r/RFSentinel) and live in the `usbwifi`
+module. See `usbwifi/NOTICE.md` for where each driver comes from.
+
+- **Supported chips:** MT7921AU (WiFi 6E: 2.4, 5 and 6 GHz), MT7612U, MT7610U, RTL8812AU, RTL8811AU/8821AU,
+  RTL8812BU/8822BU, RTL8814AU, RTL8187L/B, RT3070/RT5370 and AR9271.
+- **Firmware:** MediaTek, Ralink and RTL8822BU adapters need their maker's non-free firmware. On first plug-in
+  Wigle-X shows a notification that offers to download those exact files once from linux-firmware on kernel.org,
+  checked against a SHA-256.
+- **What gets recorded:** only access points whose beacon or probe response was decoded, so security is known.
+  Each one goes through the same path as a phone scan result (list, map, database, upload). Client devices are
+  never recorded. A hidden network keeps an empty SSID even when a probe reveals its name.
+- **Settings:** the "Use USB WiFi adapters" checkbox, on by default. Adapters run while scanning is on.
+- **Uploads:** CSV headers carry `appRelease=<version>-wiglex`, so WiGLE can tell these uploads come from this fork.
+- **Android version:** needs Android 8.0 (API 26) or newer.
+- **Licence:** the drivers are GPL-3.0 (see `usbwifi/LICENSE`), so Wigle-X as a whole is distributed under
+  GPL-3.0. WiGLE's own code stays under its BSD licence (`LICENSE`).
+
+Build: `./gradlew :wiglewifiwardriving:assembleDebug`. The "Wigle-X APK" GitHub Actions workflow builds the same
+debug APK on every push.
+
+---
+
 # WiGLE Wireless Wardriving
 
 ![ci badge](https://github.com/wiglenet/wigle-wifi-wardriving/actions/workflows/android.yml/badge.svg)

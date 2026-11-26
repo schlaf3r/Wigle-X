@@ -6,14 +6,20 @@ import java.nio.ByteOrder;
 import java.text.DecimalFormat;
 import java.text.NumberFormat;
 import java.text.SimpleDateFormat;
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Date;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.regex.Matcher;
 import java.lang.String;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -23,6 +29,8 @@ import net.wigle.wigleandroid.ListFragment;
 import net.wigle.wigleandroid.MainActivity;
 import net.wigle.wigleandroid.model.LatLng;
 import net.wigle.wigleandroid.model.Network;
+import net.wigle.wigleandroid.model.NetworkType;
+import net.wigle.usbwifi.ExternalWifi;
 import net.wigle.wigleandroid.ui.NetworkListUtil;
 import net.wigle.wigleandroid.ui.SetNetworkListAdapter;
 import net.wigle.wigleandroid.FilterMatcher;
@@ -45,6 +53,7 @@ import android.os.Build;
 import android.os.Handler;
 import android.os.Looper;
 import android.os.PowerManager;
+import android.widget.Toast;
 
 /**
  * Primary receiver logic for WiFi scan results.
@@ -92,6 +101,34 @@ public class WifiReceiver extends BroadcastReceiver {
     /** Executor for running WifiManager.startScan() off the main thread to avoid ANR from Binder blocking. */
     private final ExecutorService wifiScanExecutor = Executors.newSingleThreadExecutor();
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
+
+    // ---- Wigle-X: USB WiFi adapters in monitor mode (net.wigle.usbwifi) ----
+    /** How often access points heard by a USB adapter are recorded, like a scan result. */
+    private static final long EXTERNAL_FLUSH_MS = 2000L;
+    /** How long an access point a USB adapter heard stays on the "current" list. */
+    private static final long EXTERNAL_CURRENT_MS = 15000L;
+    /** Heard since the last flush, strongest signal per BSSID. Written by driver threads. */
+    private final ConcurrentHashMap<String, ExternalWifi.AccessPoint> externalPending = new ConcurrentHashMap<>();
+    /** Networks the last phone scan put on the list. Main thread. */
+    private final List<Network> phoneCurrentWifi = new ArrayList<>();
+    /** Networks a USB adapter put on the list, and when each was last heard. Main thread. */
+    private final Map<String, Network> externalCurrentWifi = new LinkedHashMap<>();
+    private final Map<String, Long> externalSeenAt = new HashMap<>();
+    private volatile boolean externalRunning = false;
+    private String lastExternalStatusShape = "";
+    private final Runnable externalFlush = new Runnable() {
+        @Override
+        public void run() {
+            try {
+                flushExternal( System.currentTimeMillis() );
+            } catch ( final Exception ex ) {
+                Logging.error( "USB WiFi flush failed: " + ex, ex );
+            }
+            if ( externalRunning ) {
+                mainHandler.postDelayed( this, EXTERNAL_FLUSH_MS );
+            }
+        }
+    };
 
     public WifiReceiver( final MainActivity mainActivity, final DatabaseHelper dbHelper) {
         this.mainActivity = mainActivity;
@@ -234,19 +271,11 @@ public class WifiReceiver extends BroadcastReceiver {
         }
 
         final int preQueueSize = dbHelper.getQueueSize();
-        final boolean fastMode = dbHelper.isFastMode();
         final ConcurrentLinkedHashMap<String,Network> networkCache = MainActivity.getNetworkCache();
         boolean somethingAdded = false;
         int resultSize = 0;
-
-        final boolean ssidSpeak = prefs.getBoolean( PreferenceKeys.PREF_SPEAK_SSID, false )
-                && ! mainActivity.isMuted();
-
-        //TODO: should we memoize the ssidMatcher in the MainActivity state as well?
-        final Matcher ssidMatcher = FilterMatcher.getSsidFilterMatcher( prefs, PreferenceKeys.FILTER_PREF_PREFIX );
-        final Matcher bssidMatcher = mainActivity.getBssidFilterMatcher( PreferenceKeys.PREF_EXCLUDE_DISPLAY_ADDRS );
-        final Matcher bssidDbMatcher = mainActivity.getBssidFilterMatcher( PreferenceKeys.PREF_EXCLUDE_LOG_ADDRS );
-        final Matcher bssidAlertMatcher = mainActivity.getBssidFilterMatcher( PreferenceKeys.PREF_ALERT_ADDRS );
+        final WifiIngest ctx = new WifiIngest( prefs, showCurrent );
+        phoneCurrentWifi.clear();
 
         // can be null on shutdown
         if ( results != null ) {
@@ -279,99 +308,13 @@ public class WifiReceiver extends BroadcastReceiver {
                     // cache hit, just set the level
                     network.setLevel( result.level );
                 }
-                MainActivity.recordRssiSample(network.getBssid(), result.level);
-
-                final boolean added = runNetworks.add( result.BSSID );
-                if ( added ) {
-                    if ( ssidSpeak ) {
-                        ssidSpeaker.add( network.getSsid() );
-                    }
-                }
-                somethingAdded |= added;
-
-                if ( location != null && (added || network.getLatLng() == null) ) {
-                    // set the LatLng for mapping
-                    final LatLng LatLng = new LatLng( location.getLatitude(), location.getLongitude() );
-                    network.setLatLng( LatLng );
-                    MainActivity.addNetworkToMap(network);
-                }
-
-                // if we're showing current, or this was just added, put on the list
-                if ( showCurrent || added ) {
-                    if ( FilterMatcher.isOk( ssidMatcher, bssidMatcher, prefs, PreferenceKeys.FILTER_PREF_PREFIX, network ) ) {
-                        if (listAdapter != null) {
-                            listAdapter.addWiFi( network );
-                        }
-                    }
-                    // load test
-                    // for ( int i = 0; i< 10; i++) {
-                    //  listAdapter.addWifi( network );
-                    // }
-
-                } else if (listAdapter != null) {
-                    // not showing current, and not a new thing, go find the network and update the level
-                    // this is O(n), ohwell, that's why showCurrent is the default config.
-                    for ( int index = 0; index < listAdapter.getCount(); index++ ) {
-                        try {
-                            final Network testNet = listAdapter.getItem(index);
-                            if (null != testNet) {
-                                if ( testNet.getBssid().equals( network.getBssid() ) ) {
-                                    testNet.setLevel( result.level );
-                                }
-                            }
-                        }
-                        catch (final IndexOutOfBoundsException ex) {
-                            // yes, this happened to someone
-                            Logging.info("WifiReceiver: index out of bounds: " + index + " ex: " + ex);
-                        }
-                    }
-                }
-
-                if ( location != null  ) {
-                    // if in fast mode, only add new-for-run stuff to the db queue
-                    if ( fastMode && ! added ) {
-                        Logging.info( "in fast mode, not adding seen-this-run: " + network.getBssid() );
-                    } else {
-                        // loop for stress-testing
-                        // for ( int i = 0; i < 10; i++ ) {
-                        boolean matches = false;
-                        if (bssidDbMatcher != null) {
-                            bssidDbMatcher.reset(network.getBssid());
-                            matches = bssidDbMatcher.find();
-                        }
-                        if (!matches) {
-                            dbHelper.addObservation(network, location, added);
-                        }
-                        // }
-                    }
-                } else {
-                    // no location
-                    boolean matches = false;
-                    if (bssidDbMatcher != null) {
-                        bssidDbMatcher.reset(network.getBssid());
-                        matches = bssidDbMatcher.find();
-                    }
-                    if (!matches) {
-                        dbHelper.pendingObservation( network, added, false, false );
-                    }
-                }
-
-                if (bssidAlertMatcher != null) {
-                    bssidAlertMatcher.reset(network.getBssid());
-                    if (bssidAlertMatcher.find()) {
-                        if (null != mainActivity) {
-                            mainActivity.updateLastHighSignal(network.getLevel());
-                        }
-                    }
-                }
-
-                final WiFiScanUpdater seenUpdater = updateOnSeen;
-                if (null != seenUpdater && null != safeWatchSsids && null != location) {
-                    if (safeWatchSsids.contains(network.getBssid())) {
-                        seenUpdater.handleWiFiSeen(network.getBssid(), result.level, location);
-                    }
-                }
+                somethingAdded |= recordWifi( result.BSSID, network, result.level, location, ctx, phoneCurrentWifi );
             }
+        }
+
+        // Wigle-X: access points a USB adapter heard lately stay on the "current" list between phone scans
+        if ( showCurrent ) {
+            showExternalCurrent( System.currentTimeMillis() );
         }
 
         // check if there are more "New" nets
@@ -398,8 +341,9 @@ public class WifiReceiver extends BroadcastReceiver {
 
         final long effectiveScanRequestTime = scanRequestTime <= 0 ? now : scanRequestTime;
         // setting statics for shared access
-        ListFragment.lameStatic.currWifi = resultSize;
-        ListFragment.lameStatic.currNets = resultSize + ListFragment.lameStatic.currCells; //TODO: outdated? (1/2)
+        final int currWifi = resultSize + externalOnlyCurrentCount();
+        ListFragment.lameStatic.currWifi = currWifi;
+        ListFragment.lameStatic.currNets = currWifi + ListFragment.lameStatic.currCells; //TODO: outdated? (1/2)
         ListFragment.lameStatic.runNets = runNetworks.size();
         ListFragment.lameStatic.newNets = newNetCount;
         ListFragment.lameStatic.newWifi = newWifiCount;
@@ -419,7 +363,7 @@ public class WifiReceiver extends BroadcastReceiver {
         mainActivity.setDBQueue(preQueueSize);
         scanRequestTime = nonstopScanRequestTime;
 
-        if (somethingAdded && ssidSpeak) {
+        if (somethingAdded && ctx.ssidSpeak) {
             ssidSpeaker.speak();
         }
 
@@ -427,6 +371,309 @@ public class WifiReceiver extends BroadcastReceiver {
         if (speechPeriod != 0 && now - previousTalkTime > speechPeriod * 1000L) {
             doAnnouncement(preQueueSize, newWifiCount, ListFragment.lameStatic.newCells, ListFragment.lameStatic.newBt, now);
         }
+    }
+
+    /**
+     * Wigle-X: start the USB WiFi adapter drivers. Adapters plugged in now or later are put in receive-only monitor
+     * mode (Android asks once per adapter for USB access); the access points they hear are recorded alongside the
+     * phone's own scan results. Safe to call repeatedly.
+     */
+    public void startExternalAdapters( final Context context ) {
+        if ( externalRunning ) return;
+        externalRunning = true;
+        Logging.info( "starting USB WiFi adapters" );
+        ExternalWifi.start( context, aps -> {
+            for ( final ExternalWifi.AccessPoint ap : aps ) {
+                externalPending.merge( ap.bssid, ap, ( a, b ) -> b.rssi > a.rssi ? b : a );
+            }
+        });
+        mainHandler.removeCallbacks( externalFlush );
+        mainHandler.postDelayed( externalFlush, EXTERNAL_FLUSH_MS );
+    }
+
+    /** Wigle-X: stop the USB WiFi adapter drivers and let go of the adapters. */
+    public void stopExternalAdapters( final Context context ) {
+        if ( ! externalRunning ) return;
+        externalRunning = false;
+        Logging.info( "stopping USB WiFi adapters" );
+        mainHandler.removeCallbacks( externalFlush );
+        ExternalWifi.stop( context );
+        lastExternalStatusShape = "";
+        externalPending.clear();
+        externalCurrentWifi.clear();
+        externalSeenAt.clear();
+    }
+
+    public boolean isExternalRunning() {
+        return externalRunning;
+    }
+
+    /** Wigle-X: the USB adapter status line ("" when none is plugged in). */
+    public static String getExternalStatus() {
+        return ExternalWifi.status();
+    }
+
+    /** Records what the USB adapters heard since the last flush. Main thread. */
+    private void flushExternal( final long now ) {
+        if ( mainActivity == null ) return;
+        showExternalStatus();
+        if ( ! mainActivity.isScanning() ) {
+            // scanning paused: nothing heard is recorded
+            externalPending.clear();
+            return;
+        }
+        final SharedPreferences prefs = mainActivity.getSharedPreferences( PreferenceKeys.SHARED_PREFS, 0 );
+        final boolean showCurrent = prefs.getBoolean( PreferenceKeys.PREF_SHOW_CURRENT, true );
+        final List<ExternalWifi.AccessPoint> aps = new ArrayList<>( externalPending.values() );
+        for ( final ExternalWifi.AccessPoint ap : aps ) {
+            externalPending.remove( ap.bssid, ap );
+        }
+
+        boolean somethingAdded = false;
+        if ( ! aps.isEmpty() ) {
+            final GNSSListener gpsListener = mainActivity.getGPSListener();
+            final Location location = gpsListener == null ? null : gpsListener.checkGetLocation( prefs );
+            final ConcurrentLinkedHashMap<String,Network> networkCache = MainActivity.getNetworkCache();
+            final WifiIngest ctx = new WifiIngest( prefs, showCurrent );
+            final List<Network> shown = new ArrayList<>();
+            for ( final ExternalWifi.AccessPoint ap : aps ) {
+                Network network = networkCache.get( ap.bssid );
+                if ( network == null ) {
+                    network = new Network( ap.bssid, ap.ssid, ap.frequencyMhz, ap.capabilities, ap.rssi, NetworkType.WIFI );
+                    network.setRcois( rcoisOf( ap ) );
+                    networkCache.put( network.getBssid(), network );
+                } else {
+                    network.setLevel( ap.rssi );
+                }
+                somethingAdded |= recordWifi( ap.bssid, network, ap.rssi, location, ctx, shown );
+            }
+            for ( final Network n : shown ) {
+                externalCurrentWifi.put( n.getBssid(), n );
+                externalSeenAt.put( n.getBssid(), now );
+            }
+            if ( somethingAdded && ctx.ssidSpeak ) {
+                ssidSpeaker.speak();
+            }
+        }
+
+        // drop what hasn't been heard lately from the "current" list
+        if ( pruneExternalCurrent( now ) && showCurrent && listAdapter != null ) {
+            listAdapter.clearWifi();
+            for ( final Network n : phoneCurrentWifi ) listAdapter.addWiFi( n );
+            for ( final Network n : externalCurrentWifi.values() ) listAdapter.addWiFi( n );
+        }
+        if ( aps.isEmpty() ) return;
+
+        final long newNetCount = dbHelper.getNewNetworkCount();
+        final long newWifiCount = dbHelper.getNewWifiCount();
+        final long newNetDiff = newWifiCount - prevNewNetCount;
+        prevNewNetCount = newWifiCount;
+        if ( ! mainActivity.isMuted() ) {
+            if ( newNetDiff > 0 && prefs.getBoolean( PreferenceKeys.PREF_FOUND_NEW_SOUND, true ) ) {
+                mainActivity.playNewNetSound();
+            } else if ( somethingAdded && prefs.getBoolean( PreferenceKeys.PREF_FOUND_SOUND, true ) ) {
+                mainActivity.playRunNetSound();
+            }
+        }
+        final int currWifi = phoneCurrentWifi.size() + externalOnlyCurrentCount();
+        ListFragment.lameStatic.currWifi = currWifi;
+        ListFragment.lameStatic.currNets = currWifi + ListFragment.lameStatic.currCells;
+        ListFragment.lameStatic.runNets = runNetworks.size();
+        ListFragment.lameStatic.newNets = newNetCount;
+        ListFragment.lameStatic.newWifi = newWifiCount;
+        NetworkListUtil.sort( prefs, listAdapter );
+        mainActivity.setNetCountUI();
+    }
+
+    /**
+     * Shows the adapter status ("allow USB access", "needs firmware", "running") as a toast when it changes;
+     * changing numbers alone (counts, channels) don't count as a change.
+     */
+    private void showExternalStatus() {
+        final String status = ExternalWifi.status();
+        final String shape = status.replaceAll( "\\d+(\\.\\d+)?", "#" );
+        if ( shape.equals( lastExternalStatusShape ) ) return;
+        lastExternalStatusShape = shape;
+        Logging.info( "USB WiFi: " + status );
+        if ( ! status.isEmpty() && mainActivity != null ) {
+            Toast.makeText( mainActivity.getApplicationContext(), status, Toast.LENGTH_LONG ).show();
+        }
+    }
+
+    /** Removes access points not heard for EXTERNAL_CURRENT_MS; true when any went. */
+    private boolean pruneExternalCurrent( final long now ) {
+        boolean pruned = false;
+        final Iterator<Map.Entry<String, Long>> it = externalSeenAt.entrySet().iterator();
+        while ( it.hasNext() ) {
+            final Map.Entry<String, Long> e = it.next();
+            if ( now - e.getValue() > EXTERNAL_CURRENT_MS ) {
+                externalCurrentWifi.remove( e.getKey() );
+                it.remove();
+                pruned = true;
+            }
+        }
+        return pruned;
+    }
+
+    /** After a phone scan cleared the list: put back what the USB adapters heard lately. */
+    private void showExternalCurrent( final long now ) {
+        if ( externalCurrentWifi.isEmpty() ) return;
+        pruneExternalCurrent( now );
+        if ( listAdapter != null ) {
+            for ( final Network n : externalCurrentWifi.values() ) listAdapter.addWiFi( n );
+        }
+    }
+
+    /** Access points on the list only because a USB adapter heard them (not in the last phone scan). */
+    private int externalOnlyCurrentCount() {
+        if ( externalCurrentWifi.isEmpty() ) return 0;
+        final Set<String> phone = new HashSet<>();
+        for ( final Network n : phoneCurrentWifi ) phone.add( n.getBssid() );
+        int count = 0;
+        for ( final String bssid : externalCurrentWifi.keySet() ) {
+            if ( ! phone.contains( bssid ) ) count++;
+        }
+        return count;
+    }
+
+    /** Roaming Consortium OIs from an adapter-heard beacon, as for a phone scan result. */
+    private static String rcoisOf( final ExternalWifi.AccessPoint ap ) {
+        if ( ap.roamingConsortium == null ) return null;
+        try {
+            return getConcatenatedRcois( ByteBuffer.wrap( ap.roamingConsortium ) );
+        } catch ( final RuntimeException ex ) {
+            Logging.warn( "Failed to parse Roaming Consortium IE from USB adapter: " + ex );
+            return null;
+        }
+    }
+
+    /** Per-pass settings and filters shared by phone scans and USB adapter batches. */
+    private final class WifiIngest {
+        final SharedPreferences prefs;
+        final boolean showCurrent;
+        final boolean fastMode;
+        final boolean ssidSpeak;
+        final Matcher ssidMatcher;
+        final Matcher bssidMatcher;
+        final Matcher bssidDbMatcher;
+        final Matcher bssidAlertMatcher;
+
+        WifiIngest( final SharedPreferences prefs, final boolean showCurrent ) {
+            this.prefs = prefs;
+            this.showCurrent = showCurrent;
+            this.fastMode = dbHelper.isFastMode();
+            this.ssidSpeak = prefs.getBoolean( PreferenceKeys.PREF_SPEAK_SSID, false ) && ! mainActivity.isMuted();
+            //TODO: should we memoize the ssidMatcher in the MainActivity state as well?
+            this.ssidMatcher = FilterMatcher.getSsidFilterMatcher( prefs, PreferenceKeys.FILTER_PREF_PREFIX );
+            this.bssidMatcher = mainActivity.getBssidFilterMatcher( PreferenceKeys.PREF_EXCLUDE_DISPLAY_ADDRS );
+            this.bssidDbMatcher = mainActivity.getBssidFilterMatcher( PreferenceKeys.PREF_EXCLUDE_LOG_ADDRS );
+            this.bssidAlertMatcher = mainActivity.getBssidFilterMatcher( PreferenceKeys.PREF_ALERT_ADDRS );
+        }
+    }
+
+    /**
+     * One WiFi network heard, from the phone's scan or a USB adapter: RSSI history, run set, map, list and the
+     * observation database. Main thread.
+     * @param shown networks put on the list are added here (may be null)
+     * @return true when it is new for this run
+     */
+    private boolean recordWifi( final String bssid, final Network network, final int level, final Location location,
+                                final WifiIngest ctx, final List<Network> shown ) {
+        MainActivity.recordRssiSample(network.getBssid(), level);
+
+        final boolean added = runNetworks.add( bssid );
+        if ( added ) {
+            if ( ctx.ssidSpeak ) {
+                ssidSpeaker.add( network.getSsid() );
+            }
+        }
+
+        if ( location != null && (added || network.getLatLng() == null) ) {
+            // set the LatLng for mapping
+            final LatLng LatLng = new LatLng( location.getLatitude(), location.getLongitude() );
+            network.setLatLng( LatLng );
+            MainActivity.addNetworkToMap(network);
+        }
+
+        // if we're showing current, or this was just added, put on the list
+        if ( ctx.showCurrent || added ) {
+            if ( FilterMatcher.isOk( ctx.ssidMatcher, ctx.bssidMatcher, ctx.prefs, PreferenceKeys.FILTER_PREF_PREFIX, network ) ) {
+                if (listAdapter != null) {
+                    listAdapter.addWiFi( network );
+                }
+                if (shown != null) {
+                    shown.add( network );
+                }
+            }
+            // load test
+            // for ( int i = 0; i< 10; i++) {
+            //  listAdapter.addWifi( network );
+            // }
+
+        } else if (listAdapter != null) {
+            // not showing current, and not a new thing, go find the network and update the level
+            // this is O(n), ohwell, that's why ctx.showCurrent is the default config.
+            for ( int index = 0; index < listAdapter.getCount(); index++ ) {
+                try {
+                    final Network testNet = listAdapter.getItem(index);
+                    if (null != testNet) {
+                        if ( testNet.getBssid().equals( network.getBssid() ) ) {
+                            testNet.setLevel( level );
+                        }
+                    }
+                }
+                catch (final IndexOutOfBoundsException ex) {
+                    // yes, this happened to someone
+                    Logging.info("WifiReceiver: index out of bounds: " + index + " ex: " + ex);
+                }
+            }
+        }
+
+        if ( location != null  ) {
+            // if in fast mode, only add new-for-run stuff to the db queue
+            if ( ctx.fastMode && ! added ) {
+                Logging.info( "in fast mode, not adding seen-this-run: " + network.getBssid() );
+            } else {
+                // loop for stress-testing
+                // for ( int i = 0; i < 10; i++ ) {
+                boolean matches = false;
+                if (ctx.bssidDbMatcher != null) {
+                    ctx.bssidDbMatcher.reset(network.getBssid());
+                    matches = ctx.bssidDbMatcher.find();
+                }
+                if (!matches) {
+                    dbHelper.addObservation(network, location, added);
+                }
+                // }
+            }
+        } else {
+            // no location
+            boolean matches = false;
+            if (ctx.bssidDbMatcher != null) {
+                ctx.bssidDbMatcher.reset(network.getBssid());
+                matches = ctx.bssidDbMatcher.find();
+            }
+            if (!matches) {
+                dbHelper.pendingObservation( network, added, false, false );
+            }
+        }
+
+        if (ctx.bssidAlertMatcher != null) {
+            ctx.bssidAlertMatcher.reset(network.getBssid());
+            if (ctx.bssidAlertMatcher.find()) {
+                if (null != mainActivity) {
+                    mainActivity.updateLastHighSignal(network.getLevel());
+                }
+            }
+        }
+
+        final WiFiScanUpdater seenUpdater = updateOnSeen;
+        if (null != seenUpdater && null != safeWatchSsids && null != location) {
+            if (safeWatchSsids.contains(network.getBssid())) {
+                seenUpdater.handleWiFiSeen(network.getBssid(), level, location);
+            }
+        }
+        return added;
     }
 
     public static final int NIBBLE_MASK = 0x0f;
@@ -440,19 +687,29 @@ public class WifiReceiver extends BroadcastReceiver {
     //
 
     public static String getConcatenatedRcois (ScanResult.InformationElement ie) {
-        String concatenatedRcois = null;
-
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
             if (ie.getId() != EID_ROAMING_CONSORTIUM) {
                 throw new IllegalArgumentException("Element id is not ROAMING_CONSORTIUM, : "
                         + ie.getId());
             }
+            return getConcatenatedRcois(ie.getBytes());
+        }
+        return null;
+    }
+
+    /**
+     * Roaming Consortium element body (no id / length header), from a phone scan result or a USB adapter's beacon.
+     * @return a string of concatenated RCOIS with " " delimiter, or null
+     */
+    public static String getConcatenatedRcois (final ByteBuffer body) {
+        String concatenatedRcois = null;
+        {
             // RCOI length handling from https://android.googlesource.com/platform/frameworks/opt/net/wifi/+/6f5af9b7f69b15369238bd2642c46638ba1f0255/service/java/com/android/server/wifi/util/InformationElementUtil.java#206
 
             // Roaming Consortium (OI) element format defined in IEEE 802.11 clause 9.4.2.95
             // ElementID (1 Octet), Length (1 Octet), Number of OIs (1 Octet), OI #1 and #2 Lengths (1 Octet), OI#1 (variable), OI#2 (variable), OI#3 (variable)
             // where 1 octet "OI #1 and #2 Length" comprises: OI#1 Length [B0-B3], OI#2 Length [B4-B7]
-            ByteBuffer data = ie.getBytes().order(ByteOrder.LITTLE_ENDIAN);
+            ByteBuffer data = body.order(ByteOrder.LITTLE_ENDIAN);
             if (data.remaining() < 2) {
                 Logging.warn("RCOI IE too short: " + data.remaining());
                 return null;

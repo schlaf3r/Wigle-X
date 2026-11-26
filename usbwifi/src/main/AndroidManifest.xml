@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-feature android:name="android.hardware.usb.host" android:required="false" />
+    <!-- firmware download from kernel.org, only after the user says yes -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <application>
+        <!-- Plugging in a supported USB WiFi adapter: Android offers Wigle-X, which then has USB access. -->
+        <activity
+            android:name="com.rfsentinel.app.usb.UsbAttachActivity"
+            android:exported="true"
+            android:excludeFromRecents="true"
+            android:noHistory="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.Translucent.NoTitleBar">
+            <intent-filter>
+                <action android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED" />
+            </intent-filter>
+            <meta-data
+                android:name="android.hardware.usb.action.USB_DEVICE_ATTACHED"
+                android:resource="@xml/usbwifi_device_filter" />
+        </activity>
+
+        <activity
+            android:name="com.rfsentinel.app.usb.FirmwareActivity"
+            android:exported="false"
+            android:excludeFromRecents="true"
+            android:taskAffinity=""
+            android:theme="@android:style/Theme.DeviceDefault.Dialog.NoActionBar" />
+    </application>
+</manifest>
