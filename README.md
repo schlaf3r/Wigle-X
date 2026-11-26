@@ -1,4 +1,11 @@
-# WiGLE Wireless Wardriving
+# WiGLE Wireless Wardriving -X
+
+this fork has External USB adapter support for non-root
+
+
+External USB WiFi adapter support, no root. Chips: MT7921AU (6E), MT7612U, MT7610U, RTL8812AU, RTL8811AU/8821AU, RTL8812BU/8822BU, RTL8814AU, RTL8187L/B, RT3070/RT5370, AR9271.
+
+The MT7921AU, MT7612U, MT7610U, RT3070-family and RTL8812BU/8822BU need a one-time firmware download on first plug-in.
 
 ![ci badge](https://github.com/wiglenet/wigle-wifi-wardriving/actions/workflows/android.yml/badge.svg)
 
