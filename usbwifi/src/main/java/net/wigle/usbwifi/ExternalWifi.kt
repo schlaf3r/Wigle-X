@@ -48,6 +48,10 @@ object ExternalWifi {
     @JvmStatic
     fun status(): String = UsbWifi.status
 
+    /** The first running adapter's chip name ("MT7921AU"), or null while none runs. */
+    @JvmStatic
+    fun runningChip(): String? = UsbWifi.runningChip
+
     /** How many adapters are running. */
     @JvmStatic
     fun runningCount(): Int = UsbWifi.running

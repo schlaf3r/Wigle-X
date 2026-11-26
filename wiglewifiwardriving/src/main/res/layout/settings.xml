@@ -102,6 +102,35 @@
         android:layout_height="wrap_content"
         android:text="@string/donate" />
 
+    <!-- Wigle-X: USB adapters -->
+    <LinearLayout
+        android:orientation="horizontal"
+        android:layout_width="fill_parent"
+        android:layout_height="2dip"
+        style="@style/DividerColor"
+        android:layout_marginBottom="4dip"
+        />
+    <TextView
+        android:layout_width="fill_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/settings_usb_head"
+        android:paddingHorizontal="4dp"
+        style="@style/WiGLESectionHeader"
+        />
+    <CheckBox android:id="@+id/usb_wifi_adapters"
+        android:layout_width="fill_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/usb_wifi_adapters" />
+    <CheckBox android:id="@+id/usb_bt_adapters"
+        android:layout_width="fill_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/usb_bt_adapters" />
+    <TextView android:id="@+id/usb_adapter_settings_status"
+        android:layout_width="fill_parent"
+        android:layout_height="wrap_content"
+        android:paddingHorizontal="8dp"
+        android:paddingBottom="4dp"
+        android:textSize="13sp" />
     <LinearLayout
         android:orientation="horizontal"
         android:layout_width="fill_parent"
@@ -130,11 +159,6 @@
         android:layout_width="fill_parent"
         android:layout_height="wrap_content"
         android:text="@string/show_current" />
-
-    <CheckBox android:id="@+id/usb_wifi_adapters"
-        android:layout_width="fill_parent"
-        android:layout_height="wrap_content"
-        android:text="@string/usb_wifi_adapters" />
 
     <CheckBox android:id="@+id/display_inline_histograms"
         android:layout_width="fill_parent"

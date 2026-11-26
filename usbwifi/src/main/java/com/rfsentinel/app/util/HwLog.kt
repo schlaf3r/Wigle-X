@@ -44,7 +44,8 @@ class HwLog(val title: String, val file: String, private val maxBytes: Long = 1_
     }
 }
 
-/** The one hardware log Wigle-X keeps. */
+/** The hardware logs Wigle-X keeps. */
 object HwLogs {
     @JvmField val usbWifi = HwLog("USB WiFi adapter", "usbwifi.log", 4_000_000L)
+    @JvmField val usbBt = HwLog("USB Bluetooth adapter", "usbbt.log")
 }

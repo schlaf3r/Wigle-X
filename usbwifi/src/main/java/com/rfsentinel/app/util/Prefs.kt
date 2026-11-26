@@ -30,4 +30,12 @@ object Prefs {
     /** The USB ID ("0e8d:7961") picked when several adapters are plugged in; null is Auto. */
     fun usbPick(c: Context, kind: String): String? = p(c).getString("usb_pick_$kind", null)
     fun usbPickName(c: Context, kind: String): String? = p(c).getString("usb_pick_name_$kind", null)
+
+    /** Use the Bluetooth side of a USB adapter (or a USB Bluetooth dongle) as a second LE scanner. */
+    @JvmStatic fun usbBluetooth(c: Context): Boolean = p(c).getBoolean("usb_bluetooth", true)
+    @JvmStatic fun setUsbBluetooth(c: Context, value: Boolean) = p(c).edit().putBoolean("usb_bluetooth", value).apply()
+
+    /** Adapters whose "Bluetooth turned off by its maker" notice was dismissed. */
+    fun usbBtNoticeHidden(c: Context): Set<String> = p(c).getStringSet("usb_bt_notice_hidden", emptySet()).orEmpty()
+    fun hideUsbBtNotice(c: Context, id: String) = p(c).edit().putStringSet("usb_bt_notice_hidden", usbBtNoticeHidden(c) + id).apply()
 }

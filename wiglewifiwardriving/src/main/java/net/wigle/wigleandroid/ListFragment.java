@@ -3,6 +3,12 @@
 
 package net.wigle.wigleandroid;
 
+import net.wigle.wigleandroid.listener.BluetoothReceiver;
+import net.wigle.wigleandroid.listener.WifiReceiver;
+import android.widget.Toast;
+import android.text.style.ForegroundColorSpan;
+import android.text.Spanned;
+import android.text.SpannableStringBuilder;
 import android.app.Activity;
 import android.app.Dialog;
 import android.content.Context;
@@ -189,6 +195,7 @@ public final class ListFragment extends Fragment implements ApiListener, DialogL
         setNetCountUI(state, view);
         Logging.info("setStatusUI");
         setScanStatusUI(view, null);
+        setExternalAdapterUI(view);
         Logging.info("setupLocation");
         setupLocation(view);
         dbFormat.setGroupingUsed(false);
@@ -296,6 +303,53 @@ public final class ListFragment extends Fragment implements ApiListener, DialogL
 
     public void setDBStatusUI(final String status, final long queueDepth ) {
         setDBStatusUI(getView(), status, queueDepth);
+    }
+
+    /** Wigle-X: the USB adapter indicator: chip, a green (scanning) or amber (waiting) dot, and counts heard. */
+    public void setExternalAdapterUI() {
+        setExternalAdapterUI(getView());
+    }
+
+    private void setExternalAdapterUI(final View view) {
+        if (view == null) return;
+        final TextView tv = view.findViewById(R.id.usb_adapter_status);
+        if (tv == null) return;
+        final MainActivity.State s = MainActivity.getStaticState();
+        final WifiReceiver wifi = s == null ? null : s.wifiReceiver;
+        final BluetoothReceiver bt = s == null ? null : s.bluetoothReceiver;
+        final boolean wifiOn = wifi != null && wifi.isExternalRunning();
+        final boolean btOn = bt != null && bt.isExternalBluetoothRunning();
+        final String wifiChip = wifiOn ? WifiReceiver.getExternalChip() : null;
+        final String btChip = btOn ? BluetoothReceiver.getExternalChip() : null;
+        final String wifiStatus = wifiOn ? WifiReceiver.getExternalStatus() : "";
+        final String btStatus = btOn ? BluetoothReceiver.getExternalStatus() : "";
+        if (wifiChip == null && btChip == null && wifiStatus.isEmpty() && btStatus.isEmpty()) {
+            // nothing plugged in (or the adapters are off)
+            tv.setVisibility(View.GONE);
+            return;
+        }
+        final boolean scanning = wifiChip != null || btChip != null;
+        final SpannableStringBuilder sb = new SpannableStringBuilder("\u25CF ");
+        sb.setSpan(new ForegroundColorSpan(scanning ? 0xFF4CAF50 : 0xFFFFB300), 0, 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        sb.append(wifiChip != null ? wifiChip : btChip != null ? btChip : "USB");
+        if (wifiChip != null) {
+            sb.append(' ').append(UINumberFormat.counterFormat(wifi.getExternalSeenCount())).append(" APs");
+        } else if (!wifiStatus.isEmpty()) {
+            sb.append(" WiFi waiting");
+        }
+        if (btChip != null) {
+            sb.append(" \u00B7 ").append(UINumberFormat.counterFormat(bt.getExternalBluetoothSeenCount())).append(" BLE");
+        } else if (!btStatus.isEmpty() && btOn) {
+            sb.append(" \u00B7 BT waiting");
+        }
+        tv.setText(sb);
+        tv.setVisibility(View.VISIBLE);
+        final String detail = (wifiStatus + (wifiStatus.isEmpty() || btStatus.isEmpty() ? "" : "\n") + btStatus).trim();
+        tv.setOnClickListener(v -> {
+            if (!detail.isEmpty() && getActivity() != null) {
+                Toast.makeText(getActivity(), detail, Toast.LENGTH_LONG).show();
+            }
+        });
     }
 
     public void setScanStatusUI(String status ) {

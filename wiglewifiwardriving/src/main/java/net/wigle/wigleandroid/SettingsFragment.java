@@ -1,5 +1,9 @@
 package net.wigle.wigleandroid;
 
+import net.wigle.wigleandroid.listener.BluetoothReceiver;
+import net.wigle.wigleandroid.listener.PrefCheckboxListener;
+import net.wigle.wigleandroid.listener.WifiReceiver;
+
 import static android.view.View.GONE;
 import static android.view.View.VISIBLE;
 
@@ -572,14 +576,26 @@ public final class SettingsFragment extends Fragment implements DialogListener {
         final Activity thisActivity = this.getActivity();
         if (null != thisActivity) {
             PrefsBackedCheckbox.prefBackedCheckBox(thisActivity, view, R.id.edit_showcurrent, PreferenceKeys.PREF_SHOW_CURRENT, true);
-            // Wigle-X: USB WiFi adapters
+            // Wigle-X: USB WiFi / Bluetooth adapters
+            final PrefCheckboxListener usbChanged = value -> {
+                final MainActivity m = MainActivity.getMainActivity();
+                if (m != null) {
+                    m.updateExternalAdapters(m.isScanning());
+                }
+            };
             PrefsBackedCheckbox.prefBackedCheckBox(thisActivity, view, R.id.usb_wifi_adapters,
-                    PreferenceKeys.PREF_USB_WIFI_ADAPTERS, true, value -> {
-                        final MainActivity m = MainActivity.getMainActivity();
-                        if (m != null) {
-                            m.updateExternalAdapters(m.isScanning());
-                        }
-                    });
+                    PreferenceKeys.PREF_USB_WIFI_ADAPTERS, true, usbChanged);
+            PrefsBackedCheckbox.prefBackedCheckBox(thisActivity, view, R.id.usb_bt_adapters,
+                    PreferenceKeys.PREF_USB_BT_ADAPTERS, true, usbChanged);
+            final TextView usbStatus = view.findViewById(R.id.usb_adapter_settings_status);
+            if (usbStatus != null) {
+                final String wifi = WifiReceiver.getExternalStatus();
+                final String bt = BluetoothReceiver.getExternalStatus();
+                final StringBuilder sb = new StringBuilder();
+                if (!wifi.isEmpty()) sb.append(wifi);
+                if (!bt.isEmpty()) sb.append(sb.length() > 0 ? "\n" : "").append(bt);
+                usbStatus.setText(sb.length() > 0 ? sb.toString() : getString(R.string.usb_no_adapter));
+            }
             PrefsBackedCheckbox.prefBackedCheckBox(thisActivity, view, R.id.display_inline_histograms,
                     PreferenceKeys.PREF_DISPLAY_INLINE_LIST_SIGNAL_HISTOGRAMS, false, value -> {
                         final MainActivity.State s = MainActivity.getStaticState();

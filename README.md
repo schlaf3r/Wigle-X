@@ -13,7 +13,13 @@ module. See `usbwifi/NOTICE.md` for where each driver comes from.
 - **What gets recorded:** only access points whose beacon or probe response was decoded, so security is known.
   Each one goes through the same path as a phone scan result (list, map, database, upload). Client devices are
   never recorded. A hidden network keeps an empty SSID even when a probe reveals its name.
-- **Settings:** the "Use USB WiFi adapters" checkbox, on by default. Adapters run while scanning is on.
+- **USB Bluetooth:** the Bluetooth half of a combo adapter (the AWUS036AXML's MT7921 side, Realtek combos) or a
+  plain USB Bluetooth dongle runs as a second passive LE scanner, and its adverts go into WiGLE's BLE records. The
+  MediaTek and Realtek Bluetooth firmware is offered for download the same way as the WiFi firmware.
+- **Settings:** "USB Adapters (Wigle-X)" has separate WiFi and Bluetooth checkboxes (both on by default) and a status
+  line. Adapters run while scanning is on; USB Bluetooth also needs WiGLE's Bluetooth scanning on.
+- **List screen:** an indicator by the scan status shows the adapter chip, a green (scanning) or amber (waiting) dot,
+  and how many APs and BLE devices the adapter has heard this run. Tap it for the full status.
 - **Uploads:** CSV headers carry `appRelease=<version>-wiglex`, so WiGLE can tell these uploads come from this fork.
 - **Android version:** needs Android 8.0 (API 26) or newer.
 - **Licence:** the drivers are GPL-3.0 (see `usbwifi/LICENSE`), so Wigle-X as a whole is distributed under

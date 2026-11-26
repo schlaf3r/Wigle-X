@@ -514,5 +514,8 @@
     <string name="export_alert_filter_description_hint">Filter description</string>
     <string name="export_alert_filter_empty">No alert addresses or BLE manufacturer IDs to export</string>
     <!-- Wigle-X -->
+    <string name="settings_usb_head" translatable="false">USB Adapters (Wigle-X)</string>
     <string name="usb_wifi_adapters" translatable="false">Use USB WiFi adapters (monitor mode over OTG, no root)</string>
+    <string name="usb_bt_adapters" translatable="false">Use USB Bluetooth (adapter\'s Bluetooth side or a dongle) as a second LE scanner</string>
+    <string name="usb_no_adapter" translatable="false">No USB adapter plugged in</string>
 </resources>

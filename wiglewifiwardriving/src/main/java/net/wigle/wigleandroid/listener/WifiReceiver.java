@@ -115,6 +115,8 @@ public class WifiReceiver extends BroadcastReceiver {
     private final Map<String, Network> externalCurrentWifi = new LinkedHashMap<>();
     private final Map<String, Long> externalSeenAt = new HashMap<>();
     private volatile boolean externalRunning = false;
+    /** Access points the USB adapters heard this run, for the list screen's adapter indicator. Main thread. */
+    private final Set<String> externalSeen = new HashSet<>();
     private String lastExternalStatusShape = "";
     private final Runnable externalFlush = new Runnable() {
         @Override
@@ -413,10 +415,26 @@ public class WifiReceiver extends BroadcastReceiver {
         return ExternalWifi.status();
     }
 
+    /** Wigle-X: the first running USB WiFi adapter's chip ("MT7921AU"), or null while none runs. */
+    public static String getExternalChip() {
+        return ExternalWifi.runningChip();
+    }
+
+    /** Wigle-X: how many USB WiFi adapters are running. */
+    public static int getExternalRunningCount() {
+        return ExternalWifi.runningCount();
+    }
+
+    /** Wigle-X: distinct access points the USB adapters heard this run. */
+    public int getExternalSeenCount() {
+        return externalSeen.size();
+    }
+
     /** Records what the USB adapters heard since the last flush. Main thread. */
     private void flushExternal( final long now ) {
         if ( mainActivity == null ) return;
         showExternalStatus();
+        mainActivity.setExternalAdapterUI();
         if ( ! mainActivity.isScanning() ) {
             // scanning paused: nothing heard is recorded
             externalPending.clear();
@@ -446,6 +464,9 @@ public class WifiReceiver extends BroadcastReceiver {
                     network.setLevel( ap.rssi );
                 }
                 somethingAdded |= recordWifi( ap.bssid, network, ap.rssi, location, ctx, shown );
+            }
+            for ( final ExternalWifi.AccessPoint ap : aps ) {
+                externalSeen.add( ap.bssid );
             }
             for ( final Network n : shown ) {
                 externalCurrentWifi.put( n.getBssid(), n );

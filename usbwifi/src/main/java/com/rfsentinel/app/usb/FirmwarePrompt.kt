@@ -15,7 +15,7 @@ import android.widget.Toast
 
 /**
  * Wigle-X version of RF Sentinel's firmware prompt. Some adapters (MT7921AU, MT7612U, MT7610U, RT3070, RTL8822BU)
- * need their maker's non-free firmware, which this build doesn't carry. A notification asks; tapping it opens
+ * and USB Bluetooth controllers (MediaTek, Realtek) need their maker's non-free firmware, which this build doesn't carry. A notification asks; tapping it opens
  * [FirmwareActivity], which downloads the exact files once from linux-firmware on kernel.org, checked against
  * their SHA-256 ([Firmware]), and restarts the adapter.
  */
@@ -52,21 +52,18 @@ class FirmwareActivity : Activity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        val chip = UsbWifi.firmwareNeeded
-        val blobs = chip?.let { Firmware.missing(this, it.driver) }.orEmpty()
-        if (chip == null || blobs.isEmpty()) {
-            chip?.let { UsbWifi.retry(this) }
-            finish(); return
-        }
+        val waiting = waiting()
+        if (waiting == null) { finish(); return }
+        val (name, blobs, retry) = waiting
         val kb = blobs.sumOf { it.size } / 1024
         AlertDialog.Builder(this)
-            .setTitle("Download the ${chip.name} firmware?")
+            .setTitle("Download the $name firmware?")
             .setMessage("This adapter needs its maker's firmware to run. That firmware isn't free software, so Wigle-X " +
                 "doesn't include it.\n\nWigle-X can download it once (about $kb KB) from the Linux firmware repository " +
                 "at kernel.org, check it against a fixed SHA-256, and keep it on this phone:\n" +
                 blobs.joinToString("\n") { "• ${it.name}" } +
                 "\n\nkernel.org sees your IP address, nothing else. The files stay under their maker's redistribution licence.")
-            .setPositiveButton("Download") { _, _ -> download(chip, blobs) }
+            .setPositiveButton("Download") { _, _ -> download(name, blobs, retry) }
             .setNeutralButton("Licence") { _, _ ->
                 runCatching { startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(Firmware.licenceUrl(blobs.first())))) }
                 finish()
@@ -76,19 +73,38 @@ class FirmwareActivity : Activity() {
             .show()
     }
 
-    private fun download(chip: UsbWifi.Chip, blobs: List<Firmware.Blob>) {
+    /** The WiFi side first, then the Bluetooth side: name, missing files, how to start it; null when none waits. */
+    private fun waiting(): Triple<String, List<Firmware.Blob>, (android.content.Context) -> Unit>? {
+        UsbWifi.firmwareNeeded?.let { chip ->
+            val blobs = Firmware.missing(this, chip.driver)
+            if (blobs.isNotEmpty()) return Triple(chip.name, blobs, UsbWifi::retry)
+            UsbWifi.retry(this)
+        }
+        UsbBluetooth.firmwareNeeded?.let { (chip, files) ->
+            val blobs = Firmware.missingFiles(this, files)
+            if (blobs.isNotEmpty()) return Triple("$chip Bluetooth", blobs, UsbBluetooth::retry)
+            UsbBluetooth.retry(this)
+        }
+        return null
+    }
+
+    private fun download(name: String, blobs: List<Firmware.Blob>, retry: (android.content.Context) -> Unit) {
         val app = applicationContext
         val main = Handler(Looper.getMainLooper())
-        Toast.makeText(app, "Downloading the ${chip.name} firmware…", Toast.LENGTH_SHORT).show()
+        Toast.makeText(app, "Downloading the $name firmware…", Toast.LENGTH_SHORT).show()
         finish()
         Thread({
             val error = runCatching { Firmware.download(app, blobs) }.exceptionOrNull()
             main.post {
                 if (error == null) {
-                    UsbWifi.log("Firmware for ${chip.name} downloaded and checked")
+                    UsbWifi.log("Firmware for $name downloaded and checked")
                     FirmwarePrompt.cancel(app)
-                    UsbWifi.retry(app)
-                    Toast.makeText(app, "Firmware ready: starting the ${chip.name} adapter", Toast.LENGTH_SHORT).show()
+                    retry(app)
+                    // the other side of a combo adapter may still be waiting: ask again
+                    if (UsbWifi.firmwareNeeded != null || UsbBluetooth.firmwareNeeded != null) {
+                        runCatching { app.startActivity(Intent(app, FirmwareActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)) }
+                    }
+                    Toast.makeText(app, "Firmware ready: starting the $name adapter", Toast.LENGTH_SHORT).show()
                 } else {
                     UsbWifi.log("Firmware download failed: ${UsbWifi.describe(error)}")
                     Toast.makeText(app, "Firmware download failed: ${error.message}", Toast.LENGTH_LONG).show()

@@ -12,6 +12,8 @@ public class PreferenceKeys {
     public static final String PREF_SHOW_CURRENT = "showCurrent";
     /** Wigle-X: record access points heard by USB WiFi adapters in monitor mode */
     public static final String PREF_USB_WIFI_ADAPTERS = "wiglexUsbWifiAdapters";
+    /** Wigle-X: use a USB adapter's Bluetooth side (or a USB dongle) as a second LE scanner */
+    public static final String PREF_USB_BT_ADAPTERS = "wiglexUsbBtAdapters";
     public static final String PREF_DISPLAY_INLINE_LIST_SIGNAL_HISTOGRAMS = "displayInlineListSignalHistograms";
     public static final String PREF_BE_ANONYMOUS = "beAnonymous";
     public static final String PREF_DONATE = "donate";

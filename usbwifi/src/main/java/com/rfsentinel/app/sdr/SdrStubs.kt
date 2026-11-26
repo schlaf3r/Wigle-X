@@ -4,6 +4,8 @@ package com.rfsentinel.app.sdr
 object SdrRadio {
     /** No SDR runs in Wigle-X. */
     val status: String get() = ""
+    fun isSdr(d: android.hardware.usb.UsbDevice): Boolean = false
+    fun labelOf(d: android.hardware.usb.UsbDevice): String = "SDR"
 }
 
 object RtlSdr {

@@ -46,6 +46,7 @@ import net.wigle.wigleandroid.ui.WiGLEToast;
 import net.wigle.wigleandroid.util.Logging;
 import net.wigle.wigleandroid.util.PreferenceKeys;
 import net.wigle.wigleandroid.util.ScanUtil;
+import net.wigle.usbwifi.ExternalBluetooth;
 
 import java.lang.ref.WeakReference;
 import java.util.ArrayList;
@@ -56,6 +57,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -186,6 +188,29 @@ public final class BluetoothReceiver extends BroadcastReceiver implements LeScan
     private final Set<String> prevBtle = Collections.synchronizedSet(new HashSet<>());
 
     private final boolean hasLeSupport;
+
+    // ---- Wigle-X: USB Bluetooth (net.wigle.usbwifi.ExternalBluetooth) ----
+    /** How often LE adverts heard by a USB Bluetooth controller are recorded. */
+    private static final long EXTERNAL_BT_FLUSH_MS = 2000L;
+    /** Heard since the last flush, one per address (strongest signal, name and services merged). */
+    private final ConcurrentHashMap<String, ExternalBluetooth.Advert> externalBtPending = new ConcurrentHashMap<>();
+    /** Addresses the USB controller heard this run, for the list screen's adapter indicator. */
+    private final Set<String> externalBtSeen = Collections.synchronizedSet(new HashSet<>());
+    private volatile boolean externalBtRunning = false;
+    private final Handler externalBtHandler = new Handler(Looper.getMainLooper());
+    private final Runnable externalBtFlush = new Runnable() {
+        @Override
+        public void run() {
+            try {
+                flushExternalBluetooth();
+            } catch (final Exception ex) {
+                Logging.error("USB Bluetooth flush failed: " + ex, ex);
+            }
+            if (externalBtRunning) {
+                externalBtHandler.postDelayed(this, EXTERNAL_BT_FLUSH_MS);
+            }
+        }
+    };
 
     private BluetoothReceiver() {
         hasLeSupport = false;
@@ -342,6 +367,106 @@ public final class BluetoothReceiver extends BroadcastReceiver implements LeScan
         } catch (SecurityException se) {
             Logging.warn("failing to perform BTLE scans: BT perms not granted", se);
         }
+    }
+
+    /**
+     * Wigle-X: start the USB Bluetooth LE scanner (the Bluetooth side of a combo adapter such as the MT7921AU, or a
+     * USB dongle). Its adverts are recorded like the phone's own LE scan results. Safe to call repeatedly.
+     */
+    public void startExternalBluetooth(final Context context) {
+        if (externalBtRunning) return;
+        externalBtRunning = true;
+        Logging.info("starting USB Bluetooth");
+        ExternalBluetooth.start(context, adverts -> {
+            for (final ExternalBluetooth.Advert a : adverts) {
+                externalBtPending.merge(a.address, a, BluetoothReceiver::mergeAdverts);
+            }
+        });
+        externalBtHandler.removeCallbacks(externalBtFlush);
+        externalBtHandler.postDelayed(externalBtFlush, EXTERNAL_BT_FLUSH_MS);
+    }
+
+    /** Wigle-X: stop the USB Bluetooth LE scanner and let go of the controller. */
+    public void stopExternalBluetooth(final Context context) {
+        if (!externalBtRunning) return;
+        externalBtRunning = false;
+        Logging.info("stopping USB Bluetooth");
+        externalBtHandler.removeCallbacks(externalBtFlush);
+        ExternalBluetooth.stop(context);
+        externalBtPending.clear();
+    }
+
+    public boolean isExternalBluetoothRunning() {
+        return externalBtRunning;
+    }
+
+    /** Distinct LE devices the USB controller heard this run. */
+    public int getExternalBluetoothSeenCount() {
+        return externalBtSeen.size();
+    }
+
+    /** Wigle-X: the USB Bluetooth status line ("" when none is plugged in). */
+    public static String getExternalStatus() {
+        return ExternalBluetooth.status();
+    }
+
+    /** Wigle-X: the scanning USB Bluetooth controller's name, or null. */
+    public static String getExternalChip() {
+        return ExternalBluetooth.runningChip();
+    }
+
+    private static ExternalBluetooth.Advert mergeAdverts(final ExternalBluetooth.Advert a, final ExternalBluetooth.Advert b) {
+        final ExternalBluetooth.Advert strong = b.rssi > a.rssi ? b : a;
+        final ExternalBluetooth.Advert weak = strong == a ? b : a;
+        List<String> uuids = strong.serviceUuids;
+        if (weak.serviceUuids != null) {
+            final List<String> merged = new ArrayList<>(uuids == null ? Collections.emptyList() : uuids);
+            for (final String u : weak.serviceUuids) if (!merged.contains(u)) merged.add(u);
+            uuids = merged;
+        }
+        return new ExternalBluetooth.Advert(strong.address, strong.addressType, strong.rssi,
+                strong.name != null ? strong.name : weak.name, uuids,
+                strong.manufacturerId != null ? strong.manufacturerId : weak.manufacturerId);
+    }
+
+    /** Records what the USB controller heard since the last flush, as single LE scan results. Main thread. */
+    private void flushExternalBluetooth() {
+        if (externalBtPending.isEmpty()) return;
+        final MainActivity m = MainActivity.getMainActivity();
+        final List<ExternalBluetooth.Advert> adverts = new ArrayList<>(externalBtPending.values());
+        for (final ExternalBluetooth.Advert a : adverts) {
+            externalBtPending.remove(a.address, a);
+        }
+        if (m == null || !m.isScanning()) return;
+
+        Location location = null;
+        final GNSSListener gpsListener = m.getGPSListener();
+        if (gpsListener != null) {
+            location = gpsListener.checkGetLocation(prefs);
+        }
+        for (final ExternalBluetooth.Advert a : adverts) {
+            final String bssid = a.address;
+            externalBtSeen.add(bssid);
+            latestBtle.add(bssid);
+            prevBt.remove(bssid);   // ALIBI: as for a phone LE result, LE wins over classic
+            latestBt.remove(bssid);
+            // as handleLeScanResult: the manufacturer ID is kept only when there are no service UUIDs
+            final List<String> uuid16Services = a.serviceUuids;
+            final Integer mfgrKey = uuid16Services == null ? a.manufacturerId : null;
+            addOrUpdateBt(bssid, a.name, BluetoothClass.Device.Major.UNCATEGORIZED,
+                    DEVICE_TYPE_LEGEND.get(null), a.rssi, NetworkType.BLE,
+                    uuid16Services, mfgrKey, location, prefs, false, a.addressType);
+        }
+        ListFragment.lameStatic.newBt = dbHelper.getNewBtCount();
+        ListFragment.lameStatic.runBt = runNetworks.size();
+        if (listAdapter != null) {
+            final SetNetworkListAdapter l = listAdapter.get();
+            if (null != l) {
+                NetworkListUtil.sort(prefs, l);
+            }
+        }
+        m.setNetCountUI();
+        m.setExternalAdapterUI();
     }
 
     /**

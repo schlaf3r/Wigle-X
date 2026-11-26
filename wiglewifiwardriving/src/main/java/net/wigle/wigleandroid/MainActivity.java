@@ -1190,6 +1190,7 @@ public final class MainActivity extends AppCompatActivity implements TextToSpeec
                 Logging.info("bluetoothReceiver access: " + ex);
             }
             if (state.bluetoothReceiver != null) {
+                state.bluetoothReceiver.stopExternalBluetooth(getApplicationContext());
                 state.bluetoothReceiver.stopScanning();
                 state.bluetoothReceiver.close();
             }
@@ -2172,6 +2173,8 @@ public final class MainActivity extends AppCompatActivity implements TextToSpeec
                             hasLeSupport, prefs);
                     state.bluetoothReceiver.setupBluetoothTimer(true);
                 }
+                // Wigle-X: USB Bluetooth runs alongside the phone's own
+                updateExternalAdapters(isScanning());
                 Logging.info("\tregister bluetooth BroadcastReceiver");
                 final IntentFilter intentFilter = new IntentFilter(BluetoothDevice.ACTION_FOUND);
                 intentFilter.addAction(BluetoothAdapter.ACTION_DISCOVERY_FINISHED);
@@ -2193,6 +2196,7 @@ public final class MainActivity extends AppCompatActivity implements TextToSpeec
     @SuppressLint("MissingPermission")
     public void endBluetooth(SharedPreferences prefs) {
         if (state.bluetoothReceiver != null) {
+            state.bluetoothReceiver.stopExternalBluetooth(getApplicationContext());
             state.bluetoothReceiver.stopScanning();
         }
 
@@ -2490,18 +2494,39 @@ public final class MainActivity extends AppCompatActivity implements TextToSpeec
     }
 
     /**
-     * Wigle-X: run the USB WiFi adapters (receive-only monitor mode, no root) while scanning is on and
-     * Settings › "Use USB WiFi adapters" is checked; stop them otherwise.
+     * Wigle-X: run the USB adapters (receive-only, no root) while scanning is on and their Settings boxes are
+     * checked: WiFi in monitor mode, and the adapter's Bluetooth side (or a USB dongle) as a second LE scanner
+     * when Bluetooth scanning is on. Stops them otherwise.
      */
     public void updateExternalAdapters(final boolean isScanning) {
-        if (state == null || state.wifiReceiver == null) {
+        if (state == null) {
             return;
         }
         final SharedPreferences prefs = getSharedPreferences(PreferenceKeys.SHARED_PREFS, Context.MODE_PRIVATE);
-        if (isScanning && prefs.getBoolean(PreferenceKeys.PREF_USB_WIFI_ADAPTERS, true)) {
-            state.wifiReceiver.startExternalAdapters(getApplicationContext());
-        } else {
-            state.wifiReceiver.stopExternalAdapters(getApplicationContext());
+        final Context app = getApplicationContext();
+        if (state.wifiReceiver != null) {
+            if (isScanning && prefs.getBoolean(PreferenceKeys.PREF_USB_WIFI_ADAPTERS, true)) {
+                state.wifiReceiver.startExternalAdapters(app);
+            } else {
+                state.wifiReceiver.stopExternalAdapters(app);
+            }
+        }
+        if (state.bluetoothReceiver != null) {
+            if (isScanning && prefs.getBoolean(PreferenceKeys.PREF_USB_BT_ADAPTERS, true)
+                    && prefs.getBoolean(PreferenceKeys.PREF_SCAN_BT, true)) {
+                state.bluetoothReceiver.startExternalBluetooth(app);
+            } else {
+                state.bluetoothReceiver.stopExternalBluetooth(app);
+            }
+        }
+        setExternalAdapterUI();
+    }
+
+    /** Wigle-X: refresh the USB adapter indicator on the list screen. */
+    public void setExternalAdapterUI() {
+        final ListFragment listFragment = getListFragmentIfCurrent();
+        if (listFragment != null) {
+            listFragment.setExternalAdapterUI();
         }
     }
 
