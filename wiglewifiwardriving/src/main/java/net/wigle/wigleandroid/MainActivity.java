@@ -98,6 +98,7 @@ import net.wigle.wigleandroid.listener.PhoneState;
 import net.wigle.wigleandroid.listener.WifiReceiver;
 import net.wigle.wigleandroid.model.ConcurrentLinkedHashMap;
 import net.wigle.wigleandroid.model.Network;
+import net.wigle.wigleandroid.xlink.XLinkBridge;
 import net.wigle.wigleandroid.net.WiGLEApiManager;
 import net.wigle.wigleandroid.ui.SetNetworkListAdapter;
 import net.wigle.wigleandroid.ui.ThemeUtil;
@@ -270,6 +271,11 @@ public final class MainActivity extends AppCompatActivity implements TextToSpeec
     @Override
     public void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        // Wigle-X: X-Link screen changes (linked, left, sharing switched) start or stop the link
+        net.wigle.xlink.XLink.setOnSettingsChanged(() -> {
+            final MainActivity m = getMainActivity();
+            if (m != null) m.runOnUiThread(() -> m.updateExternalAdapters(m.isScanning()));
+        });
 
         if (Build.VERSION.SDK_INT >= 33) {
             getOnBackInvokedDispatcher().registerOnBackInvokedCallback(
@@ -1167,6 +1173,7 @@ public final class MainActivity extends AppCompatActivity implements TextToSpeec
 
             if (state.wifiReceiver != null) {
                 state.wifiReceiver.stopExternalAdapters(getApplicationContext());
+                XLinkBridge.update(getApplicationContext(), false);
             }
             try {
                 Logging.info("unregister wifiReceiver");
@@ -2519,6 +2526,8 @@ public final class MainActivity extends AppCompatActivity implements TextToSpeec
                 state.bluetoothReceiver.stopExternalBluetooth(app);
             }
         }
+        // X-Link: linked phones share while scanning
+        XLinkBridge.update(app, isScanning);
         setExternalAdapterUI();
     }
 

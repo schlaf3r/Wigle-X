@@ -5,6 +5,7 @@ package net.wigle.wigleandroid;
 
 import net.wigle.wigleandroid.listener.BluetoothReceiver;
 import net.wigle.wigleandroid.listener.WifiReceiver;
+import net.wigle.wigleandroid.xlink.XLinkBridge;
 import android.widget.Toast;
 import android.text.style.ForegroundColorSpan;
 import android.text.Spanned;
@@ -305,6 +306,39 @@ public final class ListFragment extends Fragment implements ApiListener, DialogL
         setDBStatusUI(getView(), status, queueDepth);
     }
 
+    /** Wigle-X: X-Link indicator: green dot and phones connected (amber while none is); hidden when X-Link is off. */
+    private void setXLinkUI(final View view) {
+        final TextView tv = view.findViewById(R.id.xlink_status);
+        if (tv == null) return;
+        if (!XLinkBridge.isRunning()) {
+            tv.setVisibility(View.GONE);
+            return;
+        }
+        final int n = XLinkBridge.activeCount();
+        final SpannableStringBuilder sb = new SpannableStringBuilder("\u25CF X-Link " + n);
+        sb.setSpan(new ForegroundColorSpan(n > 0 ? 0xFF4CAF50 : 0xFFFFB300), 0, 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        tv.setText(sb);
+        tv.setVisibility(View.VISIBLE);
+        tv.setOnClickListener(v -> {
+            final Activity a = getActivity();
+            if (a == null) return;
+            final StringBuilder d = new StringBuilder(XLinkBridge.isNode() ? "Node" : "Main phone");
+            d.append(" \u00B7 ").append(n).append(n == 1 ? " phone" : " phones").append(" connected");
+            if (XLinkBridge.isNode()) {
+                d.append("\nSent ").append(UINumberFormat.counterFormat(XLinkBridge.sentCount()))
+                        .append(" observations, ").append(UINumberFormat.counterFormat(XLinkBridge.queued())).append(" waiting");
+            } else {
+                d.append("\nRecorded ").append(UINumberFormat.counterFormat(XLinkBridge.receivedCount()))
+                        .append(" observations from the nodes");
+                final String per = XLinkBridge.receivedSummary();
+                if (!per.isEmpty()) d.append('\n').append(per);
+            }
+            final String st = XLinkBridge.status();
+            if (!st.isEmpty()) d.append('\n').append(st);
+            Toast.makeText(a, d.toString(), Toast.LENGTH_LONG).show();
+        });
+    }
+
     /** Wigle-X: the USB adapter indicator: chip, a green (scanning) or amber (waiting) dot, and counts heard. */
     public void setExternalAdapterUI() {
         setExternalAdapterUI(getView());
@@ -312,6 +346,7 @@ public final class ListFragment extends Fragment implements ApiListener, DialogL
 
     private void setExternalAdapterUI(final View view) {
         if (view == null) return;
+        setXLinkUI(view);
         final TextView tv = view.findViewById(R.id.usb_adapter_status);
         if (tv == null) return;
         final MainActivity.State s = MainActivity.getStaticState();

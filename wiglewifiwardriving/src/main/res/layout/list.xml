@@ -292,6 +292,20 @@
             android:paddingEnd="4dp"
             tools:text="8,888,888 km"
             />
+        <!-- Wigle-X: X-Link indicator (green dot + phones connected); tap for details -->
+        <TextView
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:id="@+id/xlink_status"
+            android:layout_weight="0"
+            android:layout_gravity="end"
+            android:paddingStart="3dp"
+            android:paddingEnd="6dp"
+            android:maxLines="1"
+            android:visibility="gone"
+            tools:visibility="visible"
+            tools:text="● X-Link 2"
+            />
         <!-- Wigle-X: USB adapter indicator (chip, scanning dot, APs / BLE heard); tap for details -->
         <TextView
             android:layout_width="wrap_content"

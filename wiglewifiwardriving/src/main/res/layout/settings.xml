@@ -131,6 +131,31 @@
         android:paddingHorizontal="8dp"
         android:paddingBottom="4dp"
         android:textSize="13sp" />
+    <!-- Wigle-X: X-Link -->
+    <LinearLayout
+        android:orientation="horizontal"
+        android:layout_width="fill_parent"
+        android:layout_height="2dip"
+        style="@style/DividerColor"
+        android:layout_marginBottom="4dip"
+        />
+    <TextView
+        android:layout_width="fill_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/settings_xlink_head"
+        android:paddingHorizontal="4dp"
+        style="@style/WiGLESectionHeader"
+        />
+    <TextView android:id="@+id/xlink_settings_status"
+        android:layout_width="fill_parent"
+        android:layout_height="wrap_content"
+        android:paddingHorizontal="8dp"
+        android:paddingBottom="4dp"
+        android:textSize="14sp" />
+    <Button android:id="@+id/open_xlink"
+        android:layout_width="fill_parent"
+        android:layout_height="wrap_content"
+        android:text="@string/open_xlink" />
     <LinearLayout
         android:orientation="horizontal"
         android:layout_width="fill_parent"

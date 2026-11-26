@@ -249,6 +249,10 @@ public final class BluetoothReceiver extends BroadcastReceiver implements LeScan
      */
     @SuppressLint("MissingPermission")
     public void handleLeScanResult(final ScanResult scanResult, Location location, final boolean batch, final boolean guessLeAddressType) {
+        // Wigle-X: another phone's X-Link advert finds that phone; it isn't a device to record
+        if (scanResult != null && net.wigle.xlink.XLink.isLinkAdvert(scanResult)) {
+            return;
+        }
         try {
             final ScanRecord scanRecord = scanResult.getScanRecord();
             if (scanRecord != null) {

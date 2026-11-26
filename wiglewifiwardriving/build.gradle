@@ -111,6 +111,7 @@ configurations.configureEach {
 
 dependencies {
     implementation project(':usbwifi') // Wigle-X: USB WiFi adapters
+    implementation project(':xlink') // Wigle-X: X-Link
     implementation 'androidx.drawerlayout:drawerlayout:1.2.0'
     implementation "androidx.legacy:legacy-support-v4:1.0.0"
     implementation "androidx.legacy:legacy-support-core-utils:1.0.0"

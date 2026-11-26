@@ -3,7 +3,7 @@
 Wigle-X is a fork of the WiGLE client that also records access points heard by a **USB WiFi adapter on an OTG
 cable**, in receive-only monitor mode, **without root**. The adapter drivers run in userspace through Android's USB
 host API. They are ported from [RF Sentinel](https://github.com/schlaf3r/RFSentinel) and live in the `usbwifi`
-module. See `usbwifi/NOTICE.md` for where each driver comes from.
+module (X-Link in `xlink`). See `usbwifi/NOTICE.md` for where each driver comes from.
 
 - **Supported chips:** MT7921AU (WiFi 6E: 2.4, 5 and 6 GHz), MT7612U, MT7610U, RTL8812AU, RTL8811AU/8821AU,
   RTL8812BU/8822BU, RTL8814AU, RTL8187L/B, RT3070/RT5370 and AR9271.
@@ -20,6 +20,14 @@ module. See `usbwifi/NOTICE.md` for where each driver comes from.
   line. Adapters run while scanning is on; USB Bluetooth also needs WiGLE's Bluetooth scanning on.
 - **List screen:** an indicator by the scan status shows the adapter chip, a green (scanning) or amber (waiting) dot,
   and how many APs and BLE devices the adapter has heard this run. Tap it for the full status.
+- **X-Link:** links Wigle-X phones over Bluetooth LE (ported from RF Sentinel's Sentinel Link; Meshtastic and MQTT
+  left out). The phone the others join is the **main phone**: nodes send every observation they record, and the main
+  phone records them into its own database, so its upload carries the whole group's. Set up in Settings › X-Link
+  (Open X-Link): name the phone, tap **Link up** on the main phone and **Join a main phone** on the node, compare the
+  6-digit codes and Confirm on both. Linked phones find each other again whenever they scan. The link is encrypted
+  (AES-GCM, key agreed with the code), and nothing goes through the internet. Nodes keep observations they couldn't
+  send yet (up to 50,000) and send them once the group is back in range. The list screen shows `● X-Link N`: a green
+  dot and the number of phones connected (amber while none is). Tap it for what was sent or recorded.
 - **Uploads:** CSV headers carry `appRelease=<version>-wiglex`, so WiGLE can tell these uploads come from this fork.
 - **Android version:** needs Android 8.0 (API 26) or newer.
 - **Licence:** the drivers are GPL-3.0 (see `usbwifi/LICENSE`), so Wigle-X as a whole is distributed under

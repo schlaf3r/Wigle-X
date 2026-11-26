@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <!-- X-Link: find, advertise to and connect to the group's other phones (Android 12+: "Nearby devices") -->
+    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
+
+    <application>
+        <activity
+            android:name="net.wigle.xlink.XLinkActivity"
+            android:exported="false"
+            android:label="X-Link"
+            android:theme="@android:style/Theme.DeviceDefault" />
+    </application>
+</manifest>

@@ -36,6 +36,7 @@ import net.wigle.wigleandroid.background.BackupRunnable;
 import net.wigle.wigleandroid.model.ConcurrentLinkedHashMap;
 import net.wigle.wigleandroid.model.LatLng;
 import net.wigle.wigleandroid.model.Network;
+import net.wigle.wigleandroid.xlink.XLinkBridge;
 import net.wigle.wigleandroid.model.NetworkType;
 import net.wigle.wigleandroid.model.Pair;
 import net.wigle.wigleandroid.util.FileUtility;
@@ -1028,6 +1029,9 @@ public final class DatabaseHelper extends Thread {
 
     private boolean addObservation( final Network network, final int level, final Location location,
                                     final boolean newForRun, final boolean frequencyChanged, final boolean typeMorphed ) {
+
+        // Wigle-X: on an X-Link node, also send it to the main phone
+        XLinkBridge.offer( network, level, location );
 
         final DBUpdate update = new DBUpdate( network, level, location, newForRun, frequencyChanged, typeMorphed );
 

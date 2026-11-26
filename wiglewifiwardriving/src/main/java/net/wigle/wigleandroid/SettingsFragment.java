@@ -3,6 +3,7 @@ package net.wigle.wigleandroid;
 import net.wigle.wigleandroid.listener.BluetoothReceiver;
 import net.wigle.wigleandroid.listener.PrefCheckboxListener;
 import net.wigle.wigleandroid.listener.WifiReceiver;
+import net.wigle.wigleandroid.xlink.XLinkBridge;
 
 import static android.view.View.GONE;
 import static android.view.View.VISIBLE;
@@ -618,6 +619,22 @@ public final class SettingsFragment extends Fragment implements DialogListener {
                 if (!wifi.isEmpty()) sb.append(wifi);
                 if (!bt.isEmpty()) sb.append(sb.length() > 0 ? "\n" : "").append(bt);
                 usbStatus.setText(sb.length() > 0 ? sb.toString() : getString(R.string.usb_no_adapter));
+            }
+            // Wigle-X: X-Link
+            final TextView xlinkStatus = view.findViewById(R.id.xlink_settings_status);
+            if (xlinkStatus != null) {
+                final String role = !net.wigle.xlink.XLink.hasGroup(thisActivity)
+                        ? "Not linked. Link Wigle-X phones so one main phone records and uploads them all."
+                        : net.wigle.xlink.XLink.isMain(thisActivity)
+                        ? "This phone is the main phone (records the nodes' observations)."
+                        : "This phone is a node (sends its observations to the main phone).";
+                final String st = XLinkBridge.status();
+                xlinkStatus.setText(st.isEmpty() ? role : role + "\n" + st);
+            }
+            final View openXlink = view.findViewById(R.id.open_xlink);
+            if (openXlink != null) {
+                openXlink.setOnClickListener(v -> startActivity(
+                        new Intent(thisActivity, net.wigle.xlink.XLinkActivity.class)));
             }
             PrefsBackedCheckbox.prefBackedCheckBox(thisActivity, view, R.id.display_inline_histograms,
                     PreferenceKeys.PREF_DISPLAY_INLINE_LIST_SIGNAL_HISTOGRAMS, false, value -> {

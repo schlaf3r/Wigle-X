@@ -518,4 +518,6 @@
     <string name="usb_wifi_adapters" translatable="false">Use USB WiFi adapters (monitor mode over OTG, no root)</string>
     <string name="usb_bt_adapters" translatable="false">Use USB Bluetooth (adapter\'s Bluetooth side or a dongle) as a second LE scanner</string>
     <string name="usb_no_adapter" translatable="false">No USB adapter plugged in</string>
+    <string name="settings_xlink_head" translatable="false">X-Link (Wigle-X)</string>
+    <string name="open_xlink" translatable="false">Open X-Link</string>
 </resources>
