@@ -279,6 +279,22 @@ public final class SettingsFragment extends Fragment implements DialogListener {
         allowRefresh = true;
     }
 
+    /** Wigle-X: what a failed WiGLE login means, by HTTP status (999: no response at all). */
+    private static String loginFailureMessage(final int status) {
+        switch (status) {
+            case 401:
+            case 403:
+                return "Login failed: WiGLE rejected the username or password (" + status + "). "
+                        + "If you signed up with Google, set a password at wigle.net first.";
+            case 429:
+                return "Login failed: too many attempts. Wait a few minutes and try again.";
+            case 999:
+                return "Login failed: couldn't reach WiGLE. Check the connection and try again.";
+            default:
+                return "Login failed: WiGLE answered " + status + ".";
+        }
+    }
+
     private void updateView(final View view) {
         final FragmentActivity activity = getActivity();
         if (activity == null) return;
@@ -352,10 +368,12 @@ public final class SettingsFragment extends Fragment implements DialogListener {
         }
         // Quick doze seen while scanning (see QuickDozeDetector). Added to whatever the slot
         // already shows, since it stops scanning outright with the screen off.
-        if (prefs.contains(PreferenceKeys.PREF_QUICK_DOZE_SEEN)) {
+        // Wigle-X fix: updateView runs again after every login attempt; add the warning only once
+        final String dozeWarning = getString(R.string.quick_doze_warning);
+        if (prefs.contains(PreferenceKeys.PREF_QUICK_DOZE_SEEN)
+                && !scanThrottleHelp.getText().toString().contains(dozeWarning)) {
             if (scanThrottleHelp.getVisibility() == VISIBLE) {
-                scanThrottleHelp.setText(scanThrottleHelp.getText() + "\n\n"
-                        + getString(R.string.quick_doze_warning));
+                scanThrottleHelp.setText(scanThrottleHelp.getText() + "\n\n" + dozeWarning);
             } else {
                 scanThrottleHelp.setText(R.string.quick_doze_warning);
                 scanThrottleHelp.setVisibility(VISIBLE);
@@ -441,6 +459,11 @@ public final class SettingsFragment extends Fragment implements DialogListener {
                             Logging.error("Authentication: failed: " + status);
                             FragmentActivity activity = SettingsFragment.this.getActivity();
                             if (activity == null) activity = MainActivity.getMainActivity();
+                            // Wigle-X: say why, instead of failing silently
+                            final FragmentActivity toastActivity = activity;
+                            final String why = loginFailureMessage(status);
+                            new Handler(Looper.getMainLooper()).post(() ->
+                                    WiGLEToast.showOverFragment(toastActivity, R.string.app_name, why));
                             if (activity != null) {
                                 final SharedPreferences prefs = activity
                                         .getApplicationContext()
