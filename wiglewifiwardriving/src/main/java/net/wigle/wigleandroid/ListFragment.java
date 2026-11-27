@@ -347,6 +347,19 @@ public final class ListFragment extends Fragment implements ApiListener, DialogL
     private void setExternalAdapterUI(final View view) {
         if (view == null) return;
         setXLinkUI(view);
+        setUsbAdapterUI(view);
+        // the Wigle-X row shows only while one of its indicators does
+        final View row = view.findViewById(R.id.wiglex_status_row);
+        if (row != null) {
+            final View x = view.findViewById(R.id.xlink_status);
+            final View u = view.findViewById(R.id.usb_adapter_status);
+            final boolean any = (x != null && x.getVisibility() == View.VISIBLE)
+                    || (u != null && u.getVisibility() == View.VISIBLE);
+            row.setVisibility(any ? View.VISIBLE : View.GONE);
+        }
+    }
+
+    private void setUsbAdapterUI(final View view) {
         final TextView tv = view.findViewById(R.id.usb_adapter_status);
         if (tv == null) return;
         final MainActivity.State s = MainActivity.getStaticState();

@@ -292,34 +292,6 @@
             android:paddingEnd="4dp"
             tools:text="8,888,888 km"
             />
-        <!-- Wigle-X: X-Link indicator (green dot + phones connected); tap for details -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:id="@+id/xlink_status"
-            android:layout_weight="0"
-            android:layout_gravity="end"
-            android:paddingStart="3dp"
-            android:paddingEnd="6dp"
-            android:maxLines="1"
-            android:visibility="gone"
-            tools:visibility="visible"
-            tools:text="● X-Link 2"
-            />
-        <!-- Wigle-X: USB adapter indicator (chip, scanning dot, APs / BLE heard); tap for details -->
-        <TextView
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:id="@+id/usb_adapter_status"
-            android:layout_weight="0"
-            android:layout_gravity="end"
-            android:paddingStart="3dp"
-            android:paddingEnd="6dp"
-            android:maxLines="1"
-            android:visibility="gone"
-            tools:visibility="visible"
-            tools:text="● MT7921AU 128 APs · 42 BLE"
-            />
         <TextView
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
@@ -339,6 +311,41 @@
             android:paddingStart="3dp"
             tools:text="DB Queue: 888"
 			/>
+    </LinearLayout>
+    <!-- Wigle-X: its own row under the status row, shown only while X-Link or a USB adapter is active -->
+    <LinearLayout
+        android:id="@+id/wiglex_status_row"
+        android:orientation="horizontal"
+        android:layout_width="fill_parent"
+        android:layout_height="wrap_content"
+        android:paddingStart="4dp"
+        android:paddingEnd="5dp"
+        android:paddingBottom="2dp"
+        android:visibility="gone"
+        tools:visibility="visible">
+        <!-- X-Link: green dot + phones connected; tap for details -->
+        <TextView
+            android:id="@+id/xlink_status"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:paddingEnd="14dp"
+            android:maxLines="1"
+            android:visibility="gone"
+            tools:visibility="visible"
+            tools:text="● X-Link 2"
+            />
+        <!-- USB adapter: chip, scanning dot, APs / BLE heard; tap for details -->
+        <TextView
+            android:id="@+id/usb_adapter_status"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:maxLines="1"
+            android:ellipsize="end"
+            android:visibility="gone"
+            tools:visibility="visible"
+            tools:text="● MT7921AU 128 APs · 42 BLE"
+            />
     </LinearLayout>
     <LinearLayout
         android:orientation="horizontal"
